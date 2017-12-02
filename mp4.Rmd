@@ -1,0 +1,93 @@
+---
+title: "Mini-Project 4"
+author: "Eleanor Ewing, G.E. Ranieri, Farah Samawi"
+date: "12/02/2017"
+output: html_document
+---
+Loading packages into R
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(mdsr)
+library(RMySQL)
+library(corrplot)
+```
+Connecting to the SQL database
+```{r}
+db <- dbConnect_scidb(dbname = "imdb")
+```
+Here we are selecting movie id and counting the instances of information where the info_type_id = 3 and excluding the null information, i.e. we are counting the genres.
+Then we are also seecting the production year, all of this information if from the movie_info table. We are also joining this table on the title id in order to only select the movies. Finally we are seelecting only the movies that are produced in the USA and grouping by movie id.
+```{r}
+query <- "SELECT movie_id, 
+	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
+	               production_year
+          FROM imdb.movie_info
+          LEFT JOIN title ON movie_info.movie_id = title.id
+          WHERE kind_id = 1 AND 
+	              production_year IS NOT NULL AND 
+                production_year > 1900 AND
+	              info IS NOT NULL AND 
+	              movie_id IN (SELECT movie_id
+				                     FROM movie_info
+				                     WHERE info_type_id = 8 AND info LIKE '%USA%')
+          GROUP BY movie_id;"
+
+query_data <- db %>%
+  dbGetQuery(query)
+```
+Here we are creating another query however selecting this information only for France.
+```{r}
+queryF <- "SELECT movie_id, 
+	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
+	               production_year
+          FROM imdb.movie_info
+          LEFT JOIN title ON movie_info.movie_id = title.id
+          WHERE kind_id = 1 AND
+	              production_year IS NOT NULL AND 
+                production_year < 2017 AND
+                production_year > 1900 AND
+	              info IS NOT NULL AND 
+	              movie_id IN (SELECT movie_id
+				                     FROM movie_info
+				                     WHERE info_type_id = 8 AND info LIKE '%France%')
+          GROUP BY movie_id;"
+
+queryF_data <- db %>%
+  dbGetQuery(queryF)
+```
+Finally, we are creating a plot of the data where the x coordinates are the production year and the y axis is the genre. 
+```{r}
+# Make scatter plot
+gplot <- ggplot(query_data, aes(x = production_year, y = genres)) +
+  geom_jitter(alpha = 0.1) +
+  geom_vline(xintercept = 1947, color = "red")
+
+gplot
+```
+```{r}
+##Here we are computing the correlation between all variables in order to later compute a correlation matrix
+genres <- query_data[2]
+
+```
+
+
+```{r}
+##This constructs a correlation plot, but first we need to compute the correlation
+corrPlot <- corrplot(correlation, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+corrPlot
+```
+
+```{r}
+gplot <- ggplot(queryF_data, aes(x = production_year, y = genres)) +
+  geom_jitter(alpha = 0.1) +
+  geom_vline(xintercept = 1947, color = "red")
+
+gplot
+```
+In our data visualization we decided to map the number of genres of every movie in the USA in order to investigate possible trends of genre multiplicity. In 1954, a court decision was passed that broke up the vertical integration of studios. The results of this vertical integration, however are unclear. Our data visualization attempts to understand the effect of this vertical integration. We decided to map Hollywood and France separately to see if the court decision in Hollywood affected other countries too. We chose France as it has a blooming film industry. The density of both graphs displays the increased numbers of movies with those number of genres. The general hypothesis is that there would be increased instances of genre multiplicity directly after the court decision and perhaps a trend that continues to the modern age.
+
+Unfortunately, there is no specific or uniform trend that exists among the data. This is most likely due to the increased amount of films that may confound the data. Additionally, it may just be due to the complexity of modern films that naturally occurred as the movie industry began to grow. From the data it seems that there are spurts during certain years where there are more movies with multiple genres. For the USA one of these spurts begins around 1930-1960, then it fades a little. The second spurt starts around 1980 and at 2010 there seems to be a second spurt that more or less continues into the present age. However, in France it seems that there is more genre multiplicity between 1200-1915 which then lessens and increases after the 1947 court decision. A more visible spurt occurs more recently starting around 2000 and continuing to the modern age.
+
+In general, it seems that movies have always had several genres, however there is an increase in the number of genres in more recent years. This trend, undiscernible, as the complexity doesn’t begin or end anywhere it goes up and down among different years, however has a general increasing trend. This trend is particularly emphasized since 2000. Interestingly, the court decision in Hollywood seems to have not affected genre multiplicity in the USA. It is unclear if this court decision is the reason that we see a more stable trend of genre multiplicity in France. As an alternative hypothesis I would propose that newer directors might stick to fewer genres and later expand showing a huge range in genre multiplicity.  
