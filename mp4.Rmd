@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(mdsr)
 library(RMySQL)
+library(readr)
 ```
 Here we are selecting movie id and counting the instances of information where the info_type_id = 3 and excluding the null information, i.e. we are counting the genres.
 Then we are also seecting the production year, all of this information if from the movie_info table. We are also joining this table on the title id in order to only select the movies. Finally we are seelecting only the movies that are produced in the USA and grouping by movie id.
@@ -48,7 +49,7 @@ gross_data <- db %>%
 # this might need to be modified, not sure
 movie_data <- left_join(gross_data, query_data, by = "movie_id") %>% na.omit()
 
-#movie_data %>% mutate(gross = as.numeric(gsub('((?:\\d|\\,)*)', '\\1', gross)))
+movie_data %>% mutate(gross = parse_number(gross))
 ```
 
 Here we are creating another query however selecting this information only for France.
