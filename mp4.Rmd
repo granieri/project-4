@@ -17,6 +17,13 @@ library(readr)
 Here we are selecting movie id and counting the instances of information where the info_type_id = 3 and excluding the null information, i.e. we are counting the genres.
 Then we are also seecting the production year, all of this information if from the movie_info table. We are also joining this table on the title id in order to only select the movies. Finally we are seelecting only the movies that are produced in the USA and grouping by movie id.
 ```{r}
+# mode function courtesy of Ken Williams on stack overflow: 
+# https://stackoverflow.com/questions/2547402/is-there-a-built-in-function-for-finding-the-mode
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
 db <- dbConnect_scidb(dbname = "imdb")
 query <- "SELECT movie_id, 
 	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
@@ -25,15 +32,26 @@ query <- "SELECT movie_id,
           LEFT JOIN title ON movie_info.movie_id = title.id
           WHERE kind_id = 1 AND 
 	              production_year IS NOT NULL AND 
-                production_year > 1900 AND
+                production_year > 1900 AND production_year < 2020
 	              info IS NOT NULL AND 
 	              movie_id IN (SELECT movie_id
 				                     FROM movie_info
 				                     WHERE info_type_id = 8 AND info LIKE '%USA%')
           GROUP BY movie_id;"
 
+
+
 query_data <- db %>%
-  dbGetQuery(query)
+  dbGetQuery(query) 
+```
+
+```{r}
+genres_by_year <- query_data %>%
+  group_by(production_year) %>%
+  summarize(mean = mean(genres))
+
+ggplot(genres_by_year, aes(x = production_year, y = mean)) +
+  geom_line()
 ```
 
 ```{r}
@@ -52,41 +70,6 @@ movie_data <- left_join(gross_data, query_data, by = "movie_id") %>% na.omit()
 movie_data %>% mutate(gross = parse_number(gross))
 ```
 
-Here we are creating another query however selecting this information only for France.
-```{r}
-queryF <- "SELECT movie_id, 
-	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
-	               production_year
-          FROM imdb.movie_info
-          LEFT JOIN title ON movie_info.movie_id = title.id
-          WHERE kind_id = 1 AND
-	              production_year IS NOT NULL AND 
-                production_year < 2017 AND
-                production_year > 1900 AND
-	              info IS NOT NULL AND 
-	              movie_id IN (SELECT movie_id
-				                     FROM movie_info
-				                     WHERE info_type_id = 8 AND info LIKE '%France%')
-          GROUP BY movie_id;"
-
-queryF_data <- db %>%
-  dbGetQuery(queryF)
-```
-Finally, we are creating a plot of the data where the x coordinates are the production year and the y axis is the genre. 
-```{r}
-# Make scatter plot
-gplot <- ggplot(query_data, aes(x = production_year, y = genres, color = gross_data)) +
-  geom_jitter(alpha = 0.1)
-
-gplot
-```
-
-```{r}
-gplot <- ggplot(queryF_data, aes(x = production_year, y = genres)) +
-  geom_jitter(alpha = 0.1) +
-  geom_vline(xintercept = 1947, color = "red")
-
-gplot
 ```
 In our data visualization we decided to map the number of genres of every movie in the USA in order to investigate possible trends of genre multiplicity. In 1954, a court decision was passed that broke up the vertical integration of studios. The results of this vertical integration, however are unclear. Our data visualization attempts to understand the effect of this vertical integration. We decided to map Hollywood and France separately to see if the court decision in Hollywood affected other countries too. We chose France as it has a blooming film industry. The density of both graphs displays the increased numbers of movies with those number of genres. The general hypothesis is that there would be increased instances of genre multiplicity directly after the court decision and perhaps a trend that continues to the modern age.
 
