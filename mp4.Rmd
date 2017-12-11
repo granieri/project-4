@@ -16,75 +16,75 @@ library(RColorBrewer)
 ```
 
 ```{r}
+# Connect to IMDb
 db <- dbConnect_scidb(dbname = "imdb")
-query_genre <- "SELECT movie_id, 
-	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
-	               production_year
-          FROM imdb.movie_info
-          LEFT JOIN title ON movie_info.movie_id = title.id
-          WHERE kind_id = 1 AND 
-	              production_year IS NOT NULL AND 
-                production_year > 1909 AND production_year < 2000 AND
-	              info IS NOT NULL AND 
-	              movie_id IN (SELECT movie_id
-				                     FROM movie_info
-				                     WHERE info_type_id = 8 AND info LIKE '%USA%')
-          GROUP BY movie_id;"
+
+# Get genre info
+query_genre <- 
+  "SELECT movie_id, 
+    COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
+    production_year
+  FROM imdb.movie_info
+  LEFT JOIN title ON movie_info.movie_id = title.id
+  WHERE kind_id = 1 AND 
+    production_year IS NOT NULL AND 
+    production_year > 1909 AND production_year < 2000 AND
+    info IS NOT NULL AND 
+    movie_id IN (SELECT movie_id
+                  FROM movie_info
+                  WHERE info_type_id = 8 AND 
+                  info LIKE '%USA%')
+  GROUP BY movie_id;"
 
 genre_data <- db %>%
   dbGetQuery(query_genre) 
+
+# Get gross info
+query_gross <- 
+  "SELECT movie_id, info AS gross
+    FROM imdb.movie_info
+    LEFT JOIN title ON movie_info.movie_id = title.id
+    WHERE kind_id = 1 AND 
+      production_year IS NOT NULL AND
+      info_type_id = 107"
+  
+gross_data <- db %>%
+  dbGetQuery(query_gross)
 ```
 
 ```{r}
+# Determine average number of genres per year
 genres_by_year <- genre_data %>%
   group_by(production_year) %>%
   summarize(mean = mean(genres))
 
+# Plotting year vs. average number of genres
 ggplot(genres_by_year, aes(x = production_year, y = mean)) +
   geom_line()
 ```
 
 ```{r}
-query_gross <- "SELECT movie_id, info AS gross
-  FROM imdb.movie_info
-  LEFT JOIN title ON movie_info.movie_id = title.id
-  WHERE kind_id = 1 AND production_year IS NOT NULL AND
-  info_type_id = 107"
-  
-gross_data <- db %>%
-  dbGetQuery(query_gross)
-  
-movie_data <- left_join(gross_data, genre_data, by = "movie_id") %>% na.omit()
+# Join genre data with gross data
+movie_data <- left_join(gross_data, genre_data, by = "movie_id") %>% 
+  na.omit()
 
+# Helper function to convert string into number for gross column
 numberize <- function(str) {
   parse_number(sub(" .*", "", str))
 }
 
+# Filtering gross to usable form and preparing to plot
 movie_data <- movie_data %>%
   filter(substr(gross, 1, 1) == "$") %>%
   filter(grepl("*\\(USA\\)*", gross)) %>%
   mutate(gross = numberize(gross)) %>%
   group_by(movie_id) %>%
+  # can we summarize in a less hacky way?
   summarize(gross = max(gross), genres = max(genres), production_year = max(production_year))
-```
 
-```{r}
-# remove 0's
+# remove 0's, ie, 0 genres listed, 0 gross profit, etc. 
 row_sub = apply(movie_data, 1, function(row) all(row !=0 ))
 movie_data <- movie_data[row_sub,]
-
-# movie_data <- movie_data %>% 
-#   mutate(genres = 
-#     ifelse(genres < 4,
-#       1,
-#       ifelse(genres < 6,
-#         2,
-#         ifelse(genres < 9,
-#           3,
-#           4)
-#         )
-#       )
-#   )
 ```
 
 ```{r}
