@@ -1,6 +1,6 @@
 ---
 title: "Mini-Project 4"
-author: "Eleanor Ewing, G.E. Ranieri, Farah Samawi"
+author: "Eleanor Ewing, Max Ranieri, Farah Samawi"
 date: "12/02/2017"
 output: 
   html_document:
