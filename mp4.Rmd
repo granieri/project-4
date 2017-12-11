@@ -41,15 +41,30 @@ genre_data <- db %>%
 
 # Get gross info
 query_gross <- 
-  "SELECT movie_id, info AS gross
-    FROM imdb.movie_info
-    LEFT JOIN title ON movie_info.movie_id = title.id
-    WHERE kind_id = 1 AND 
-      production_year IS NOT NULL AND
-      info_type_id = 107"
+  "SELECT movie_id, 
+    info AS gross
+  FROM imdb.movie_info
+  LEFT JOIN title ON movie_info.movie_id = title.id
+  WHERE kind_id = 1 AND 
+    production_year IS NOT NULL AND
+    info_type_id = 107"
   
 gross_data <- db %>%
   dbGetQuery(query_gross)
+
+# Get user rating info
+query_rating <-
+  "SELECT movie_id, 
+    info AS rating
+  FROM imdb.movie_info_idx
+  LEFT JOIN title ON movie_info_idx.movie_id = title.id
+  WHERE kind_id = 1 AND
+    production_year IS NOT NULL AND
+    info_type_id = 101 AND
+    info IS NOT NULL;"
+
+rating_data <- db %>%
+  dbGetQuery(query_rating)
 ```
 
 ```{r}
@@ -90,4 +105,19 @@ movie_data <- movie_data[row_sub,]
 ```{r}
 ggplot(movie_data, aes(x = production_year, y = genres, col = gross )) +
   geom_jitter(alpha = 0.1)
+```
+
+```{r}
+movie_data2 <- left_join(rating_data, genre_data, by = "movie_id") %>% 
+  na.omit()
+
+movie_data2 <- movie_data2 %>%
+  mutate(rating = parse_number(rating))
+```
+
+```{r}
+ggplot(movie_data2, aes(x = production_year, y = rating, color = genres, size = genres)) +
+  scale_colour_gradient(low = "white", high = "black", na.value = "red", guide = "colorbar") +
+  geom_jitter(shape = 1) +
+  theme_dark()
 ```
