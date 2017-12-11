@@ -24,7 +24,7 @@ query_genre <- "SELECT movie_id,
           LEFT JOIN title ON movie_info.movie_id = title.id
           WHERE kind_id = 1 AND 
 	              production_year IS NOT NULL AND 
-                production_year > 1975 AND production_year < 2000 AND
+                production_year > 1909 AND production_year < 2000 AND
 	              info IS NOT NULL AND 
 	              movie_id IN (SELECT movie_id
 				                     FROM movie_info
@@ -62,7 +62,10 @@ numberize <- function(str) {
 
 movie_data <- movie_data %>%
   filter(substr(gross, 1, 1) == "$") %>%
-  mutate(gross = numberize(gross))
+  filter(grepl("*\\(USA\\)*", gross)) %>%
+  mutate(gross = numberize(gross)) %>%
+  group_by(movie_id) %>%
+  summarize(gross = max(gross), genres = max(genres), production_year = max(production_year))
 ```
 
 ```{r}
