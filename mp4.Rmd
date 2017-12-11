@@ -6,47 +6,40 @@ output:
   html_document:
     code_folding: hide
 ---
-Loading packages into R
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(mdsr)
 library(RMySQL)
 library(readr)
+library(RColorBrewer)
 ```
+
 Here we are selecting movie id and counting the instances of information where the info_type_id = 3 and excluding the null information, i.e. we are counting the genres.
 Then we are also seecting the production year, all of this information if from the movie_info table. We are also joining this table on the title id in order to only select the movies. Finally we are seelecting only the movies that are produced in the USA and grouping by movie id.
-```{r}
-# mode function courtesy of Ken Williams on stack overflow: 
-# https://stackoverflow.com/questions/2547402/is-there-a-built-in-function-for-finding-the-mode
-Mode <- function(x) {
-  ux <- unique(x)
-  ux[which.max(tabulate(match(x, ux)))]
-}
 
+```{r}
 db <- dbConnect_scidb(dbname = "imdb")
-query <- "SELECT movie_id, 
+query_genre <- "SELECT movie_id, 
 	               COUNT(CASE WHEN info_type_id = 3 THEN info ELSE NULL END) AS genres,
 	               production_year
           FROM imdb.movie_info
           LEFT JOIN title ON movie_info.movie_id = title.id
           WHERE kind_id = 1 AND 
 	              production_year IS NOT NULL AND 
-                production_year > 1900 AND production_year < 2020
+                production_year > 1975 AND production_year < 2000 AND
 	              info IS NOT NULL AND 
 	              movie_id IN (SELECT movie_id
 				                     FROM movie_info
 				                     WHERE info_type_id = 8 AND info LIKE '%USA%')
           GROUP BY movie_id;"
 
-
-
-query_data <- db %>%
-  dbGetQuery(query) 
+genre_data <- db %>%
+  dbGetQuery(query_genre) 
 ```
 
 ```{r}
-genres_by_year <- query_data %>%
+genres_by_year <- genre_data %>%
   group_by(production_year) %>%
   summarize(mean = mean(genres))
 
@@ -64,12 +57,40 @@ query_gross <- "SELECT movie_id, info AS gross
 gross_data <- db %>%
   dbGetQuery(query_gross)
   
-# this might need to be modified, not sure
-movie_data <- left_join(gross_data, query_data, by = "movie_id") %>% na.omit()
+movie_data <- left_join(gross_data, genre_data, by = "movie_id") %>% na.omit()
 
-movie_data %>% mutate(gross = parse_number(gross))
+numberize <- function(str) {
+  parse_number(sub(" .*", "", str))
+}
+
+movie_data <- movie_data %>%
+  filter(substr(gross, 1, 1) == "$") %>%
+  mutate(gross = numberize(gross))
 ```
 
+```{r}
+# remove 0's
+row_sub = apply(movie_data, 1, function(row) all(row !=0 ))
+movie_data <- movie_data[row_sub,]
+
+movie_data <- movie_data %>% 
+  mutate(genres = 
+    ifelse(genres < 4,
+      1,
+      ifelse(genres < 6,
+        2,
+        ifelse(genres < 9,
+          3,
+          4)
+        )
+      )
+  )
+```
+
+```{r}
+ggplot(movie_data, aes(x = production_year, y = gross, alpha = factor(genres))) +
+  geom_jitter(col = "black") +
+  theme_dark()
 ```
 In our data visualization we decided to map the number of genres of every movie in the USA in order to investigate possible trends of genre multiplicity. In 1954, a court decision was passed that broke up the vertical integration of studios. The results of this vertical integration, however are unclear. Our data visualization attempts to understand the effect of this vertical integration. We decided to map Hollywood and France separately to see if the court decision in Hollywood affected other countries too. We chose France as it has a blooming film industry. The density of both graphs displays the increased numbers of movies with those number of genres. The general hypothesis is that there would be increased instances of genre multiplicity directly after the court decision and perhaps a trend that continues to the modern age.
 
