@@ -39,19 +39,6 @@ query_genre <-
 genre_data <- db %>%
   dbGetQuery(query_genre) 
 
-# Get gross info
-query_gross <- 
-  "SELECT movie_id, 
-    info AS gross
-  FROM imdb.movie_info
-  LEFT JOIN title ON movie_info.movie_id = title.id
-  WHERE kind_id = 1 AND 
-    production_year IS NOT NULL AND
-    info_type_id = 107"
-  
-gross_data <- db %>%
-  dbGetQuery(query_gross)
-
 # Get user rating info
 query_rating <-
   "SELECT movie_id, 
@@ -75,59 +62,30 @@ genres_by_year <- genre_data %>%
 
 # Plotting year vs. average number of genres
 ggplot(genres_by_year, aes(x = production_year, y = mean)) +
-  geom_line(col = "white") +
   geom_vline(aes(xintercept=1948), col="red") +
+  geom_line(col = "black") +
   labs(x = "Year", y = "Average genre multiplicity") +
   theme_dark() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
 ```
 
 ```{r}
-# Join genre data with gross data
-movie_data <- left_join(gross_data, genre_data, by = "movie_id") %>% 
+# Joining genre with ratings and cleaning up rating data
+movie_data <- left_join(rating_data, genre_data, by = "movie_id") %>% 
   na.omit()
 
-# Helper function to convert string into number for gross column
-numberize <- function(str) {
-  parse_number(sub(" .*", "", str))
-}
-
-# Filtering gross to usable form and preparing to plot
+# Ratings are strings in the database, so we need to explicitly convert them
 movie_data <- movie_data %>%
-  filter(substr(gross, 1, 1) == "$") %>%
-  filter(grepl("*\\(USA\\)*", gross)) %>%
-  mutate(gross = numberize(gross)) %>%
-  group_by(movie_id) %>%
-  # can we summarize in a less hacky way?
-  summarize(gross = max(gross), genres = max(genres), production_year = max(production_year))
-
-# remove 0's, ie, 0 genres listed, 0 gross profit, etc. 
-row_sub = apply(movie_data, 1, function(row) all(row !=0 ))
-movie_data <- movie_data[row_sub,]
-```
-
-```{r}
-ggplot(movie_data, aes(x = production_year, y = genres, col = gross )) +
-  geom_jitter(alpha = 0.1)
-```
-
-```{r}
-movie_data2 <- left_join(rating_data, genre_data, by = "movie_id") %>% 
-  na.omit()
-
-movie_data2 <- movie_data2 %>%
   mutate(rating = parse_number(rating))
+
+# Ignore anything with 0 genres (missing data)
+row_sub = apply(movie_data, 1, function(row) all(row !=0 ))
+movie_data2 <- movie_data2[row_sub,]
 ```
 
 ```{r}
-ggplot(movie_data2, aes(x = production_year, y = rating, color = genres, size = genres)) +
-  scale_colour_gradient(low = "white", high = "black", na.value = "red", guide = "colorbar") +
-  geom_jitter(shape = 1) +
-  theme_dark()
-```
-
-```{r}
-movie_data2 <- movie_data2 %>%
+# Factorizing genres into 3 categories, 1-3 genres, 4-6, and 7+
+movie_data <- movie_data %>%
   mutate(genres =
     ifelse(genres < 4,
       1,
@@ -140,17 +98,16 @@ movie_data2 <- movie_data2 %>%
 ```
 
 ```{r}
-row_sub = apply(movie_data2, 1, function(row) all(row !=0 ))
-movie_data2 <- movie_data2[row_sub,]
-
-movie_data2 <- movie_data2 %>%
+# Preparing to plot movie_data
+movie_data <- movie_data %>%
   group_by(genres, production_year) %>%
   summarize(rating = mean(rating))
 
+# Customizing a ColorBrewer color set
 spectral2 = brewer.pal(4, "Spectral")
 
-ggplot(movie_data2, aes(x = production_year, y = rating, color=factor(genres))) +
-  #geom_ribbon(aes(ymin = 0, ymax = rating), alpha = 0.3) +
+# Plot that movie data!
+ggplot(movie_data, aes(x = production_year, y = rating, color=factor(genres))) +
   geom_line(alpha = 0.8) +
   scale_color_manual(values = spectral2, 
                      labels = c("1-3", "4-6", "7+"), 
