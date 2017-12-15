@@ -1,13 +1,15 @@
 ---
-title: "Mini-Project 4"
-author: "Eleanor Ewing, Max Ranieri, Farah Samawi"
-date: "12/02/2017"
+title: "*Deadpool* or Dead End?"
+author: "Eleanor Ewing, Max Ranieri, and Farah Samawi"
+date: "`r format(Sys.time(), '%H:%M on %d %B, %Y')`"
 output: 
   html_document:
     code_folding: hide
+    css: style.css
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, message = FALSE, warning = FALSE)
+
 library(tidyverse)
 library(mdsr)
 library(RMySQL)
@@ -16,7 +18,19 @@ library(RColorBrewer)
 library(ggthemes)
 ```
 
-```{r}
+<h3>Does mixing genres strengthen or sabotage a film?</h3>
+
+The Internet Movie Database, better known as IMDb, lists five distinct genres for the 2016 Marvel release *Deadpool*: action, adventure, comedy, romance, and sci-fi. But this level of genre multiplicity and crossover is not often seen in big Hollywood blockbusters—consider some of *Deadpool's* competitors from the same year, such as *X-Men Apocalypse*, *Captain America: Civil War*, and *Batman Vs. Superman*, which all list the same set of 3 genres: action, adventure, and sci-fi. Although those movies take on different tones, they stick to tried and true formulas that fans can recognize. After all, as film theorist Steve Neale [writes](https://books.google.com/books/about/Genre.html?id=d9IOAQAAIAAJ), "genres are instances of repetition and difference"—a good film blends tropes fans respond to with new twists to keep things interesting. 
+
+Hollywood producers appeal to our expectations of conventional genre elements in marketing. For example, action film trailers emphasize dramatic fight sequences and use explosive sound. From watching such a trailer, an action fan knows that they would probably enjoy the subject, while a fan of romantic comedies knows it may not be up their alley. 
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/HB-iZoOnB1I" frameborder="0" gesture="media" allow="encrypted-media" allowfullscreen></iframe>
+<div class="caption">This seasonally-appropriate *Deadpool* trailer frames it as a comedy film. With lots of guns.</div>
+
+So for a movie like Deadpool, which falls into many disparate categories, audiences may find it hard to determine whether or not they are in the target demographic. In this ways, the clarity of a movie's genre greatly influences the audience's decision to watch the movie, and how they receive it if they do. If the mix isn't just right, the [movie may flop](https://www.theguardian.com/film/2009/mar/22/outlander-mash-up-movies). A movie may confound an audience by sticking its fingers in too many pies, so we have to wonder—is it worth it for producers to even try?
+
+In order to get a general sense for the trend in genre multiplicity, we can look at the average number of genres IMDb records for films made in the US between 1909 and the present day. 
+```{r sql}
 # Connect to IMDb
 db <- dbConnect_scidb(dbname = "imdb")
 
@@ -55,7 +69,7 @@ rating_data <- db %>%
   dbGetQuery(query_rating)
 ```
 
-```{r}
+```{r num-by-year, fig.align = "center"}
 # Determine average number of genres per year
 genres_by_year <- genre_data %>%
   group_by(production_year) %>%
@@ -70,15 +84,22 @@ ggplot(genres_by_year, aes(x = production_year, y = mean)) +
            alpha = 0.4) +
   annotate("vline", 
            xintercept=1948,
-           ymin=-Inf, ymax=Inf, 
+           ymin=-Inf, # this is "ignored" but annotate requires it; code breaks otherwise 
            col="red") +
   geom_line(col = "white") +
   labs(x = "Year", 
        y = "Average number of genres") +
   theme_solarized_2(light = FALSE)
 ```
+<div class="caption">Average numbers of genres for US films over the years</div>
 
-```{r}
+In order to get the most out of this visual, allow us to digress into a [brief history lesson](http://historycooperative.org/the-history-of-the-hollywood-movie-industry/). Movie studios began settling in Los Angeles around 1912, creating increasingly sophisticated silent films until the dawn of recorded sound in 1927. With the release of The Jazz Singer in that year, Hollywood entered its Golden Age, and new genres such as action, comedy, and horror began to bloom alongside old standards like drama. The Golden Age is set aside in gold on the graph.
+
+However, shortly following the landmark decision of *United States vs. Paramount Pictures, Inc.* in 1948 (marked in red), which broke up big Hollywood trusts, the systems for movie production and distribution changed. A little over a decade later, the 1960's saw the end of the Golden Age and a massive decline in Hollywood production vis-a-vis its new competitor, the television industry. Some studios were taken over by multinational companies and entrepreneurs. With fewer movies coming out, studios seem to have had less room for experimenting with genres, and instead clung to the purest forms of the formulas it had found success with in the past. Finally, this downturn came to an end in the 1970's as some of the previous restrictions on all the good stuff—violence, sex, and language—were lifted. There was a quiet rebirth as studios experimented with special effects and increased profits through home video sales. More recently, the trend towards genre crossover seems to have come back into style.
+
+So, it’s pretty clear that genre crossover waxes and wanes with the tides of Hollywood. But we also need to consider how these choices go over with audiences. IMDb provides data on user ratings, on a scale of 1 to 10. This data comes from IMDb’s user base, so it’s not a perfectly objective metric, but it gives us a sense of how audiences—at least, the [college-educated male audiences](https://www.alexa.com/siteinfo/imdb.com) who are IMDb’s most common visitors—receive films. 
+
+```{r ratings}
 # Joining genre with ratings and cleaning up rating data
 movie_data <- left_join(rating_data, genre_data, by = "movie_id") %>% 
   na.omit()
@@ -89,10 +110,10 @@ movie_data <- movie_data %>%
 
 # Ignore anything with 0 genres (missing data)
 row_sub = apply(movie_data, 1, function(row) all(row !=0 ))
-movie_data2 <- movie_data2[row_sub,]
+movie_data <- movie_data[row_sub,]
 ```
 
-```{r}
+```{r factorize-genres}
 # Factorizing genres into 3 categories, 1-3 genres, 4-6, and 7+
 movie_data <- movie_data %>%
   mutate(genres =
@@ -106,7 +127,7 @@ movie_data <- movie_data %>%
   )
 ```
 
-```{r}
+```{r ratings-by-year, fig.align = "center"}
 # Preparing to plot movie_data
 movie_data <- movie_data %>%
   group_by(genres, production_year) %>%
@@ -127,3 +148,13 @@ ggplot(movie_data, aes(x = production_year, y = rating, color=factor(genres))) +
   theme_solarized_2(light = FALSE)
   #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 ```
+
+<div class="caption">Average ratings for US films over the years, sorted by number of genres</div>
+
+Movies are divided here into three categories: those with 1-3 genres (low multiplicity), those with 4-6 genres (medium multiplicity), and those with 7 or more genres (high multiplicity). Although the final group includes films with up to 14 genres, there are very few (about ten or so) that actually surpass 10.  
+
+A cursory glance at this graphic tells us one big thing: movies with high multiplicity are all over the map. The peaks may surpass those of low- and medium-multiplicity films, but the troughs also fall far below. In general, the number of genres seems to roughly correlate to how consistently movies are rated. Audiences may love movies that blend lots of genres—or they may hate them. 
+
+Some directors—like all artists—may argue that film is about experimenting and taking risks. After all, taking risks is the only way to learn and grow. T.S. Eliot wrote that "Only those who will risk going too far can possibly find out how far one can go." In that same vein, director George Lucas, best known as the creator of the *Star Wars* franchise, [has stated](https://www.arts.gov/NEARTS/2014v4-art-failure-importance-risk-and-experimentation) that "If you're creating things, you're doing things that have a high potential for failure, especially if you're doing things that haven't been done before. And you learn from those things...[F]ailure is another word for experience." On the other hand, movies with only 1-3 genres are playing it safe at the expense of that very experience. So while historically, perhaps genre mixing has led to failure in the form of poor audience response, perhaps with the current upward trend of multiplicity directors can learn to "[Try again. Fail again. Fail better](http://www.samuel-beckett.net/w_ho.htm)." Or, maybe they will stick with what works and keep raking in the dough.
+
+<footer>See this article's version history and source code on [github](https://github.com/fsamawi/project-4).</footer>
